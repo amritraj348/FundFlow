@@ -6,6 +6,7 @@ const requestLogger = require('./middleware/requestLogger');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 const healthRouter = require('./routes/health');
+const authRouter = require('./routes/auth');
 
 const app = express();
 
@@ -15,9 +16,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
 app.use('/api/health', healthRouter);
+app.use('/api/auth', authRouter);
 
-// Feature routes (auth, ngos, campaigns, donations, ...) mount here as
-// later phases add them.
+// Feature routes (ngos, campaigns, donations, ...) mount here as later
+// phases add them.
 
 app.use(notFound);
 app.use(errorHandler);
