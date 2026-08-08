@@ -27,6 +27,11 @@ function errorHandler(err, req, res, next) {
     message = `Duplicate value for field: ${field}`;
   }
 
+  // Multer upload errors (file too large, unexpected field, etc.)
+  if (err.name === 'MulterError') {
+    statusCode = 400;
+  }
+
   res.status(statusCode).json({
     success: false,
     message,
