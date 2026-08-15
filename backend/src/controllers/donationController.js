@@ -9,7 +9,7 @@ const { sendDonationNotifications } = require('../utils/donationNotifications');
 const { loadDonationForReceipt, buildReceiptNumber, generateReceiptPdf } = require('../utils/receipt');
 
 const createOrder = asyncHandler(async (req, res) => {
-  const { campaignId, amount, isAnonymous, guestInfo } = req.body;
+  const { campaignId, amount, isAnonymous, guestInfo, message } = req.body;
 
   const campaign = await Campaign.findById(campaignId);
   if (!campaign) {
@@ -54,6 +54,7 @@ const createOrder = asyncHandler(async (req, res) => {
     currency: campaign.currency || 'INR',
     isAnonymous: Boolean(isAnonymous),
     guestInfo: req.user ? undefined : guestInfo,
+    message: message || undefined,
     status: 'pending',
     razorpayOrderId: order.id,
   });

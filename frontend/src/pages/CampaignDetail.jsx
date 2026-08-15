@@ -1,35 +1,42 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { fetchCampaignByIdOrSlug } from '../api/campaigns';
+import DonationPanel from '../components/donations/DonationPanel';
 
-// Shows campaign details only — the donation checkout flow is explicitly
-// Phase 8 scope, not this one.
+const STATUS_MESSAGES = {
+  closed: 'This campaign is now closed and no longer accepting donations.',
+  completed: 'This campaign has reached its goal — thank you to everyone who gave!',
+  draft: 'This campaign has not been published yet.',
+};
+
 export default function CampaignDetail() {
   const { idOrSlug } = useParams();
   const [campaign, setCampaign] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setIsLoading(true);
-      setError('');
+  const load = useCallback(
+    async ({ silent } = {}) => {
+      if (!silent) {
+        setIsLoading(true);
+        setError('');
+      }
       try {
         const data = await fetchCampaignByIdOrSlug(idOrSlug);
-        if (!cancelled) setCampaign(data.campaign);
+        setCampaign(data.campaign);
       } catch {
-        if (!cancelled) setError('Campaign not found.');
+        setError('Campaign not found.');
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!silent) setIsLoading(false);
       }
-    }
+    },
+    [idOrSlug]
+  );
+
+  useEffect(() => {
     load();
-    return () => {
-      cancelled = true;
-    };
-  }, [idOrSlug]);
+  }, [load]);
 
   if (isLoading) return <p className="mx-auto max-w-3xl px-4 py-12 text-gray-500 sm:px-6">Loading…</p>;
 
@@ -68,14 +75,13 @@ export default function CampaignDetail() {
         </div>
         <p className="mt-1 text-sm text-gray-500">{campaign.donorCount} donation(s) so far</p>
 
-        <button
-          type="button"
-          disabled
-          title="Donation checkout is coming in Phase 8"
-          className="mt-6 w-full rounded-md bg-teal-700 px-4 py-2.5 text-sm font-medium text-white opacity-60"
-        >
-          Donate (coming soon)
-        </button>
+        {campaign.status === 'active' ? (
+          <DonationPanel campaign={campaign} onDonationSuccess={() => load({ silent: true })} />
+        ) : (
+          <p className="mt-6 rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            {STATUS_MESSAGES[campaign.status] || 'This campaign is not currently accepting donations.'}
+          </p>
+        )}
       </div>
     </div>
   );

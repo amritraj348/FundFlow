@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function validateCreateOrder(req, res, next) {
-  const { campaignId, amount, guestInfo } = req.body;
+  const { campaignId, amount, guestInfo, message } = req.body;
   const errors = [];
 
   if (!campaignId || !mongoose.isValidObjectId(campaignId)) {
@@ -28,6 +28,10 @@ function validateCreateOrder(req, res, next) {
         errors.push('guestInfo.email must be a valid email for guest donations');
       }
     }
+  }
+
+  if (message !== undefined && (typeof message !== 'string' || message.length > 500)) {
+    errors.push('message must be a string of at most 500 characters');
   }
 
   if (errors.length > 0) {

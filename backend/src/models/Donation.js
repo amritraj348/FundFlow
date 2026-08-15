@@ -29,6 +29,11 @@ const donationSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    message: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+    },
     guestInfo: {
       name: { type: String, trim: true },
       email: { type: String, trim: true, lowercase: true },
