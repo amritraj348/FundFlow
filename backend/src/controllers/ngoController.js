@@ -121,7 +121,10 @@ const listNgos = asyncHandler(async (req, res) => {
   });
 });
 
-// super_admin-only moderation: approve or reject an NGO's profile.
+// super_admin-only moderation: approve or reject an NGO's profile. A reason
+// is required when rejecting (enforced by validateApprovalStatus) and is
+// cleared out on any status change that doesn't supply one (e.g. approving
+// after a previous rejection shouldn't leave a stale reason behind).
 const setApprovalStatus = asyncHandler(async (req, res) => {
   const ngo = await NGO.findById(req.params.id);
   if (!ngo) {
@@ -131,6 +134,7 @@ const setApprovalStatus = asyncHandler(async (req, res) => {
   }
 
   ngo.approvalStatus = req.body.approvalStatus;
+  ngo.moderationReason = req.body.reason || undefined;
   await ngo.save();
 
   res.status(200).json({ success: true, ngo });

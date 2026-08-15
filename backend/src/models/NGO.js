@@ -53,6 +53,10 @@ const ngoSchema = new Schema(
       enum: ['pending', 'approved', 'rejected'],
       default: 'pending',
     },
+    moderationReason: {
+      type: String,
+      trim: true,
+    },
   },
   { timestamps: true }
 );

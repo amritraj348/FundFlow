@@ -10,6 +10,7 @@ const authRouter = require('./routes/auth');
 const ngoRouter = require('./routes/ngos');
 const campaignRouter = require('./routes/campaigns');
 const donationRouter = require('./routes/donations');
+const analyticsRouter = require('./routes/analytics');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/ngos', ngoRouter);
 app.use('/api/campaigns', campaignRouter);
 app.use('/api/donations', donationRouter);
+app.use('/api/analytics', analyticsRouter);
 
 app.use(notFound);
 app.use(errorHandler);

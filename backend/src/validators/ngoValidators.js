@@ -39,12 +39,19 @@ function validateUpdateNgo(req, res, next) {
 }
 
 function validateApprovalStatus(req, res, next) {
-  const { approvalStatus } = req.body;
+  const { approvalStatus, reason } = req.body;
   const allowed = ['pending', 'approved', 'rejected'];
+  const errors = [];
+
   if (!approvalStatus || !allowed.includes(approvalStatus)) {
-    return res
-      .status(400)
-      .json({ success: false, message: `approvalStatus must be one of: ${allowed.join(', ')}` });
+    errors.push(`approvalStatus must be one of: ${allowed.join(', ')}`);
+  }
+  if (approvalStatus === 'rejected' && (!reason || !reason.trim())) {
+    errors.push('A reason is required when rejecting an NGO');
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({ success: false, message: errors.join('; ') });
   }
   next();
 }
