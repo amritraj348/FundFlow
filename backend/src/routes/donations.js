@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { createOrder, verifyPayment, handleWebhook, listMyDonations } = require('../controllers/donationController');
+const { createOrder, verifyPayment, handleWebhook, listMyDonations, getReceipt } = require('../controllers/donationController');
 const { validateCreateOrder, validateVerifyPayment } = require('../validators/donationValidators');
 const protect = require('../middleware/auth');
 const optionalAuth = require('../middleware/optionalAuth');
@@ -13,5 +13,6 @@ router.post('/verify-payment', validateVerifyPayment, verifyPayment);
 // signature verification (in the controller) is what authenticates the caller.
 router.post('/webhook', handleWebhook);
 router.get('/my', protect, listMyDonations);
+router.get('/:id/receipt', protect, getReceipt);
 
 module.exports = router;

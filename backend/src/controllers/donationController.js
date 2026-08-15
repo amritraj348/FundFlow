@@ -5,6 +5,8 @@ const Campaign = require('../models/Campaign');
 const razorpay = require('../config/razorpay');
 const config = require('../config/env');
 const asyncHandler = require('../utils/asyncHandler');
+const { sendDonationNotifications } = require('../utils/donationNotifications');
+const { loadDonationForReceipt, buildReceiptNumber, generateReceiptPdf } = require('../utils/receipt');
 
 const createOrder = asyncHandler(async (req, res) => {
   const { campaignId, amount, isAnonymous, guestInfo } = req.body;
@@ -134,6 +136,15 @@ async function markDonationSuccessOnce(donation, paymentId, signature) {
     await Campaign.findByIdAndUpdate(donation.campaign, {
       $inc: { raisedAmount: donation.amount, donorCount: 1 },
     });
+
+    // Fire-and-forget: the donation/webhook response shouldn't wait on PDF
+    // generation + SMTP round trips, and a failed email must never fail this
+    // request. Gated on updatedDonation being truthy means this only ever
+    // runs on the one call that actually flipped the status — the same
+    // guard that prevents double-counting also prevents double-sending.
+    sendDonationNotifications(updatedDonation._id).catch((err) => {
+      console.error(`[notifications] Unhandled error for donation ${updatedDonation._id}:`, err);
+    });
   }
 
   return { finalDonation: updatedDonation || donation, alreadyProcessed: !updatedDonation };
@@ -226,4 +237,36 @@ const listMyDonations = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { createOrder, verifyPayment, handleWebhook, listMyDonations };
+// Regenerates the PDF on demand rather than serving a stored file — PDFKit
+// generation is cheap and deterministic from the donation record, so there's
+// nothing to keep in sync and no separate file storage to manage.
+const getReceipt = asyncHandler(async (req, res) => {
+  const donation = await loadDonationForReceipt(req.params.id);
+  if (!donation) {
+    const error = new Error('Donation not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const isOwner = donation.donor && donation.donor._id.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== 'super_admin') {
+    const error = new Error('Forbidden: you do not own this donation');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (donation.status !== 'success') {
+    const error = new Error('Receipt not available until payment is confirmed');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const pdfBuffer = await generateReceiptPdf(donation);
+  const receiptNumber = buildReceiptNumber(donation);
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="FundFlow-Receipt-${receiptNumber}.pdf"`);
+  res.send(pdfBuffer);
+});
+
+module.exports = { createOrder, verifyPayment, handleWebhook, listMyDonations, getReceipt };
