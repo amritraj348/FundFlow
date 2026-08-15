@@ -100,20 +100,33 @@ const verifyPayment = asyncHandler(async (req, res) => {
     throw error;
   }
 
-  // Atomic compare-and-swap: only the request that flips the status away
-  // from "success" gets to increment the campaign totals, so a duplicate
-  // verify-payment call (retry, double-click, race) can't double-count —
-  // even under concurrent requests, since this is enforced at the DB level
-  // rather than by the status check above.
+  // Atomic compare-and-swap, shared with the webhook handler: only the
+  // request that flips the status away from "success" gets to increment the
+  // campaign totals, so a duplicate verify-payment call (retry, double-click,
+  // race — or the webhook beating us to it) can't double-count, since this
+  // is enforced at the DB level rather than by the status check above.
+  const { finalDonation, alreadyProcessed } = await markDonationSuccessOnce(
+    donation,
+    razorpay_payment_id,
+    razorpay_signature
+  );
+
+  res.status(200).json({ success: true, donation: finalDonation, alreadyProcessed });
+});
+
+// Applies the same atomic compare-and-swap used in verifyPayment: only the
+// call that flips status away from "success" gets to increment campaign
+// totals. Shared here so verify-payment and the webhook can race freely —
+// whichever arrives first wins, the other is a no-op.
+async function markDonationSuccessOnce(donation, paymentId, signature) {
+  const fields = { status: 'success', razorpayPaymentId: paymentId };
+  if (signature) {
+    fields.razorpaySignature = signature;
+  }
+
   const updatedDonation = await Donation.findOneAndUpdate(
     { _id: donation._id, status: { $ne: 'success' } },
-    {
-      $set: {
-        status: 'success',
-        razorpayPaymentId: razorpay_payment_id,
-        razorpaySignature: razorpay_signature,
-      },
-    },
+    { $set: fields },
     { new: true }
   );
 
@@ -123,9 +136,69 @@ const verifyPayment = asyncHandler(async (req, res) => {
     });
   }
 
-  const finalDonation = updatedDonation || (await Donation.findById(donation._id));
+  return { finalDonation: updatedDonation || donation, alreadyProcessed: !updatedDonation };
+}
 
-  res.status(200).json({ success: true, donation: finalDonation, alreadyProcessed: !updatedDonation });
+// Razorpay calls this server-to-server on payment lifecycle events. It's the
+// durable source of truth for payment status — verify-payment (the
+// client-driven checkout callback) is a best-effort fast path, but a user
+// closing their browser before it fires, or the request failing to reach us,
+// must not leave a successful payment stuck as "pending". Both paths share
+// the same atomic guard so whichever arrives first wins and neither can
+// double-count.
+const handleWebhook = asyncHandler(async (req, res) => {
+  if (!config.razorpay.webhookSecret) {
+    const error = new Error('RAZORPAY_WEBHOOK_SECRET is not configured');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const signature = req.headers['x-razorpay-signature'];
+  if (!signature || !req.rawBody) {
+    return res.status(400).json({ success: false, message: 'Missing webhook signature or body' });
+  }
+
+  const expectedSignature = crypto.createHmac('sha256', config.razorpay.webhookSecret).update(req.rawBody).digest('hex');
+
+  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+  const providedBuffer = Buffer.from(signature, 'utf8');
+  const isValid =
+    expectedBuffer.length === providedBuffer.length && crypto.timingSafeEqual(expectedBuffer, providedBuffer);
+
+  if (!isValid) {
+    return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
+  }
+
+  const { event } = req.body;
+  const paymentEntity = req.body?.payload?.payment?.entity;
+
+  if (!paymentEntity?.order_id) {
+    // Nothing actionable (e.g. an event type we don't handle) — ack so
+    // Razorpay doesn't retry.
+    return res.status(200).json({ success: true, message: 'Event ignored' });
+  }
+
+  const donation = await Donation.findOne({ razorpayOrderId: paymentEntity.order_id });
+  if (!donation) {
+    // Could be a genuine race with create-order (webhook beat our own write
+    // to the DB), or an order from another integration. Either way, erroring
+    // here just makes Razorpay retry with the same problem — log and ack.
+    console.warn(`[webhook] No donation found for order ${paymentEntity.order_id} (event: ${event})`);
+    return res.status(200).json({ success: true, message: 'Donation not found, acknowledged' });
+  }
+
+  if (event === 'payment.captured') {
+    await markDonationSuccessOnce(donation, paymentEntity.id);
+  } else if (event === 'payment.failed') {
+    // Only demote created/pending — never overwrite an already-successful
+    // or already-failed donation.
+    await Donation.findOneAndUpdate(
+      { _id: donation._id, status: { $nin: ['success', 'failed'] } },
+      { $set: { status: 'failed', razorpayPaymentId: paymentEntity.id } }
+    );
+  }
+
+  res.status(200).json({ success: true });
 });
 
 const listMyDonations = asyncHandler(async (req, res) => {
@@ -153,4 +226,4 @@ const listMyDonations = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { createOrder, verifyPayment, listMyDonations };
+module.exports = { createOrder, verifyPayment, handleWebhook, listMyDonations };

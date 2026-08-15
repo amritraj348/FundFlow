@@ -14,7 +14,16 @@ const donationRouter = require('./routes/donations');
 const app = express();
 
 app.use(cors({ origin: config.clientUrl, credentials: true }));
-app.use(express.json());
+app.use(
+  express.json({
+    // Stashes the exact raw bytes alongside the parsed body. The Razorpay
+    // webhook route needs these to verify the HMAC signature — re-serializing
+    // req.body wouldn't reliably reproduce the exact bytes Razorpay signed.
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
