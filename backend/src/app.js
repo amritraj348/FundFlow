@@ -9,6 +9,7 @@ const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const ngoRouter = require('./routes/ngos');
 const campaignRouter = require('./routes/campaigns');
+const donationRouter = require('./routes/donations');
 
 const app = express();
 
@@ -21,8 +22,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/ngos', ngoRouter);
 app.use('/api/campaigns', campaignRouter);
-
-// Feature routes (donations, ...) mount here as later phases add them.
+app.use('/api/donations', donationRouter);
 
 app.use(notFound);
 app.use(errorHandler);
