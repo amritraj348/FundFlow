@@ -13,6 +13,7 @@ const protect = require('../middleware/auth');
 const optionalAuth = require('../middleware/optionalAuth');
 const authorize = require('../middleware/authorize');
 const upload = require('../middleware/upload');
+const { createLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.get('/', listCampaigns);
 router.get('/mine', protect, authorize('ngo_admin'), listMyCampaigns);
 router.post(
   '/',
+  createLimiter,
   protect,
   authorize('ngo_admin'),
   upload.single('image'),

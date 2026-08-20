@@ -6,6 +6,9 @@ const campaignSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'NGO',
       required: true,
+      // listMyCampaigns, ownership checks, and the analytics topCampaigns
+      // lookup all query/join on this.
+      index: true,
     },
     title: {
       type: String,
@@ -63,5 +66,13 @@ const campaignSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Covers the public listing's dominant query shape (listCampaigns): filter
+// by status, optionally by category, sorted by createdAt desc. A status-only
+// or status+category query can both use a prefix of this same compound
+// index, so one index serves both. Free-text search still falls back to an
+// unindexed regex scan on title/description — see the note on `search` in
+// campaignController.js for why that's an accepted trade-off for now.
+campaignSchema.index({ status: 1, category: 1, createdAt: -1 });
 
 module.exports = model('Campaign', campaignSchema);

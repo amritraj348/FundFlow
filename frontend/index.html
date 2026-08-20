@@ -3,6 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      CSP lives here as a <meta> tag rather than an HTTP header because this
+      SPA has no server of its own yet (Vite dev server today, a static host
+      after Phase 11) — a meta tag travels with the built HTML regardless of
+      host. One real limitation: the CSP spec only honors `frame-ancestors`
+      (clickjacking protection) via an HTTP header, never via <meta> — add it
+      as a response header at deploy time (e.g. vercel.json) once there's a
+      host to set headers on.
+
+      script-src has no 'unsafe-inline'/'unsafe-eval' — that's the actual
+      XSS backstop: even if attacker-controlled text ever ended up in the
+      DOM, the browser would refuse to execute it as script. React's default
+      JSX escaping (no dangerouslySetInnerHTML anywhere in this app) is what
+      stops it from getting there in the first place; this is the second
+      layer behind that.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src 'self' https://*.razorpay.com;
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data: https://res.cloudinary.com https://*.razorpay.com;
+        font-src 'self' data:;
+        connect-src 'self' %VITE_API_ORIGIN% https://*.razorpay.com;
+        frame-src https://api.razorpay.com;
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self';
+      "
+    />
     <title>FundFlow — Fundraising for NGOs</title>
   </head>
   <body>

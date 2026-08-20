@@ -9,10 +9,19 @@ if (missing.length > 0) {
   throw new Error(`Missing required environment variable(s): ${missing.join(', ')}`);
 }
 
+// CLIENT_URL may be a single origin or a comma-separated list (e.g. a
+// Vercel preview URL alongside the production domain post-deploy) — CORS
+// checks against this exact set, never a wildcard.
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT) || 5000,
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  clientUrl: allowedOrigins[0],
+  allowedOrigins,
 
   mongoUri: process.env.MONGO_URI,
 

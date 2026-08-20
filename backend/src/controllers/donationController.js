@@ -1,5 +1,3 @@
-const crypto = require('crypto');
-
 const Donation = require('../models/Donation');
 const Campaign = require('../models/Campaign');
 const razorpay = require('../config/razorpay');
@@ -7,6 +5,18 @@ const config = require('../config/env');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendDonationNotifications } = require('../utils/donationNotifications');
 const { loadDonationForReceipt, buildReceiptNumber, generateReceiptPdf } = require('../utils/receipt');
+const { verifyHmacSignature } = require('../utils/verifySignature');
+
+// razorpaySignature is a pure integrity-check artifact — the frontend never
+// reads it (it only ever reads Razorpay's own checkout response, never our
+// API's donation object) and it has no legitimate use once verification has
+// happened server-side, so client-facing responses drop it rather than
+// exposing implementation detail with no upside.
+function toSafeDonation(donation) {
+  const obj = donation.toObject ? donation.toObject() : donation;
+  const { razorpaySignature, ...safe } = obj;
+  return safe;
+}
 
 const createOrder = asyncHandler(async (req, res) => {
   const { campaignId, amount, isAnonymous, guestInfo, message } = req.body;
@@ -80,18 +90,14 @@ const verifyPayment = asyncHandler(async (req, res) => {
   }
 
   if (donation.status === 'success') {
-    return res.status(200).json({ success: true, donation, alreadyProcessed: true });
+    return res.status(200).json({ success: true, donation: toSafeDonation(donation), alreadyProcessed: true });
   }
 
-  const expectedSignature = crypto
-    .createHmac('sha256', config.razorpay.keySecret)
-    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    .digest('hex');
-
-  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
-  const providedBuffer = Buffer.from(razorpay_signature, 'utf8');
-  const isValid =
-    expectedBuffer.length === providedBuffer.length && crypto.timingSafeEqual(expectedBuffer, providedBuffer);
+  const isValid = verifyHmacSignature({
+    payload: `${razorpay_order_id}|${razorpay_payment_id}`,
+    secret: config.razorpay.keySecret,
+    signature: razorpay_signature,
+  });
 
   if (!isValid) {
     donation.status = 'failed';
@@ -114,7 +120,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
     razorpay_signature
   );
 
-  res.status(200).json({ success: true, donation: finalDonation, alreadyProcessed });
+  res.status(200).json({ success: true, donation: toSafeDonation(finalDonation), alreadyProcessed });
 });
 
 // Applies the same atomic compare-and-swap used in verifyPayment: only the
@@ -170,12 +176,11 @@ const handleWebhook = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Missing webhook signature or body' });
   }
 
-  const expectedSignature = crypto.createHmac('sha256', config.razorpay.webhookSecret).update(req.rawBody).digest('hex');
-
-  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
-  const providedBuffer = Buffer.from(signature, 'utf8');
-  const isValid =
-    expectedBuffer.length === providedBuffer.length && crypto.timingSafeEqual(expectedBuffer, providedBuffer);
+  const isValid = verifyHmacSignature({
+    payload: req.rawBody,
+    secret: config.razorpay.webhookSecret,
+    signature,
+  });
 
   if (!isValid) {
     return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
@@ -224,6 +229,7 @@ const listMyDonations = asyncHandler(async (req, res) => {
 
   const [donations, total] = await Promise.all([
     Donation.find(filter)
+      .select('-razorpaySignature')
       .populate('campaign', 'title slug coverImageUrl')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)

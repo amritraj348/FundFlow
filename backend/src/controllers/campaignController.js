@@ -141,11 +141,22 @@ const listCampaigns = asyncHandler(async (req, res) => {
     filter.status = { $in: PUBLIC_STATUSES };
   }
 
-  if (req.query.category) {
+  // typeof guards, not just the global sanitize middleware: sanitize strips
+  // "$"-prefixed keys (blocks operator injection) but a query param can
+  // still arrive as an array (?category=a&category=a again) rather than a
+  // string, which would reach a raw regex/filter assignment below and either
+  // misbehave or throw — belt-and-suspenders for input that isn't malicious,
+  // just the wrong shape.
+  if (req.query.category && typeof req.query.category === 'string') {
     filter.category = req.query.category;
   }
 
-  if (req.query.search) {
+  // Plain regex search, not a $text index: with no MongoDB text index on
+  // title/description, this is an unindexed collection scan — acceptable at
+  // this project's scale, but worth flagging as the first thing to revisit
+  // (migrate to a $text index + $text query) if campaign search ever needs
+  // to perform well against a large collection.
+  if (req.query.search && typeof req.query.search === 'string') {
     const term = req.query.search.trim();
     if (term) {
       const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');

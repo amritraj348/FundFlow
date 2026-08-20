@@ -12,11 +12,12 @@ const { validateCreateNgo, validateUpdateNgo, validateApprovalStatus } = require
 const protect = require('../middleware/auth');
 const optionalAuth = require('../middleware/optionalAuth');
 const authorize = require('../middleware/authorize');
+const { createLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
 router.get('/', optionalAuth, listNgos);
-router.post('/', protect, authorize('ngo_admin'), validateCreateNgo, createNgo);
+router.post('/', createLimiter, protect, authorize('ngo_admin'), validateCreateNgo, createNgo);
 // Must come before /:id — otherwise "me" would be captured as an :id value.
 router.get('/me', protect, authorize('ngo_admin'), getMyNgo);
 router.get('/:id', optionalAuth, getNgoById);

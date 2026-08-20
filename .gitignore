@@ -29,6 +29,7 @@ Thumbs.db
 
 # Testing
 coverage/
+backend/tests/.mongo-uri
 
 # Misc
 *.pem

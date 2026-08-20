@@ -83,7 +83,11 @@ const updateNgo = asyncHandler(async (req, res) => {
 });
 
 const getNgoById = asyncHandler(async (req, res) => {
-  const ngo = await NGO.findById(req.params.id).populate('admin', 'name email');
+  // This endpoint is public for approved NGOs (optionalAuth) — populate only
+  // the admin's name, never their email. Their account email isn't the
+  // NGO's public contact address (the NGO has its own `email` field for
+  // that) and has no reason to be exposed to anonymous visitors.
+  const ngo = await NGO.findById(req.params.id).populate('admin', 'name');
   if (!ngo) {
     const error = new Error('NGO not found');
     error.statusCode = 404;
