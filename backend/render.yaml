@@ -1,0 +1,70 @@
+# Render Blueprint — see https://render.com/docs/blueprint-spec
+#
+# This lets Render provision the backend service with one click ("New +" ->
+# "Blueprint", point it at this repo). It does NOT deploy anything by
+# itself — Render still needs the repo connected via its dashboard, and
+# every `sync: false` var below must be typed in manually there (secrets
+# never belong in a committed file). Auto-deploy-on-push is Render's
+# default for a connected repo, so once this exists a `git push` to `main`
+# ships the backend.
+services:
+  - type: web
+    name: fundflow-backend
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # PORT is injected by Render itself — do not set it here, the app
+      # already reads process.env.PORT with a local-dev fallback.
+
+      # Real frontend origin, filled in after the Vercel deploy (see
+      # DEPLOYMENT.md "post-deploy steps"). Comma-separate if you ever need
+      # more than one allowed origin (e.g. a Vercel preview URL).
+      - key: CLIENT_URL
+        sync: false
+
+      - key: MONGO_URI
+        sync: false
+
+      # Render can generate cryptographically random values for these
+      # directly — no need to invent or copy one in.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
