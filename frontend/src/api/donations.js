@@ -1,5 +1,9 @@
 import apiClient from './client';
 
+export function fetchMyDonations(params) {
+  return apiClient.get('/donations/my', { params }).then((res) => res.data);
+}
+
 export function createDonationOrder(payload) {
   return apiClient.post('/donations/create-order', payload).then((res) => res.data);
 }

@@ -49,6 +49,15 @@ const createNgo = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, ngo });
 });
 
+// Self-scoped like the Phase 6 analytics endpoints — no :id param, so
+// there's nothing to guess or leak. Returns ngo: null (not a 404) when the
+// ngo_admin hasn't created a profile yet, since that's a normal state for
+// the dashboard to render around, not an error.
+const getMyNgo = asyncHandler(async (req, res) => {
+  const ngo = await NGO.findOne({ admin: req.user._id });
+  res.status(200).json({ success: true, ngo: ngo || null });
+});
+
 const updateNgo = asyncHandler(async (req, res) => {
   const ngo = await NGO.findById(req.params.id);
   if (!ngo) {
@@ -140,4 +149,4 @@ const setApprovalStatus = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, ngo });
 });
 
-module.exports = { createNgo, updateNgo, getNgoById, listNgos, setApprovalStatus };
+module.exports = { createNgo, updateNgo, getNgoById, getMyNgo, listNgos, setApprovalStatus };
